@@ -85,7 +85,7 @@ list() {
   get_releases | jq -r '[.[].tag_name] | reverse | .[]' | while read -r version; do
     if [ "$BIN_DIR/nvim" -ef "$LIB_DIR/$version/bin/nvim" ]; then
       echo "* $version (current)"
-    elif [ -d "$LIB_DIR/$version" ]; then
+    elif [ -f "$LIB_DIR/$version/bin/nvim" ]; then
       echo "* $version"
     else
       echo "  $version"
@@ -102,7 +102,8 @@ use() {
   local version_file="$BIN_DIR/nvim-$version"
   local version_dir="$LIB_DIR/$version"
 
-  if [ ! -d "$version_dir" ]; then
+  if [ ! -f "$version_dir/bin/nvim" ]; then
+    rm -f "$version_file"
     install "$version"
   fi
 
