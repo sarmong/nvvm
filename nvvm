@@ -27,6 +27,7 @@ usage() {
   echo "  use <version>       Use a specific version of neovim (e.g., 'latest', 'stable', '0.5.0')" >&2
   echo "  list                List available versions of neovim" >&2
   echo "  run <version>       Run a specified version of neovim (e.g., 'latest', 'stable', '0.5.0')" >&2
+  echo "  uninstall <version> Remove an installed version of neovim" >&2
   echo "  refresh             Refresh the releases cache" >&2
 }
 
@@ -69,6 +70,7 @@ main() {
 
   case "$cmd" in
     install) install "$@" ;;
+    uninstall) uninstall "$@" ;;
     use) use "$@" ;;
     list) list "$@" ;;
     run) run "$@" ;;
@@ -191,6 +193,52 @@ install() {
 
   if [ ! -L "$BIN_DIR/nvim" ]; then
     use "$version"
+  fi
+}
+
+uninstall() {
+  local force=0
+  local args=()
+  for arg in "$@"; do
+    case "$arg" in
+      --force | -f) force=1 ;;
+      *) args+=("$arg") ;;
+    esac
+  done
+
+  if [ ${#args[@]} -eq 0 ]; then
+    echo "Usage: nvvm uninstall [--force|-f] <version>" >&2
+    exit 1
+  fi
+
+  local version="${args[0]}"
+  local version_dir="$LIB_DIR/$version"
+  local version_file="$BIN_DIR/nvim-$version"
+
+  if [ ! -d "$version_dir" ]; then
+    printf "nvvm: version %s is not installed\n" "$version" >&2
+    exit 1
+  fi
+
+  local active_link="$BIN_DIR/nvim"
+  local is_active=0
+  if [ -L "$active_link" ] && [ "$(readlink -f "$active_link")" = "$(readlink -f "$version_dir/bin/nvim")" ]; then
+    is_active=1
+  fi
+
+  if [ "$is_active" -eq 1 ] && [ "$force" -eq 0 ]; then
+    printf "nvvm: version %s is currently active. Use --force (-f) to uninstall anyway.\n" "$version" >&2
+    exit 1
+  fi
+
+  rm -f "$version_file"
+  rm -rf "$version_dir"
+
+  echo "Uninstalled neovim $version"
+
+  if [ "$is_active" -eq 1 ]; then
+    rm -f "$active_link"
+    echo "Warning: no version is currently active. Run 'nvvm use <version>' to set one."
   fi
 }
 

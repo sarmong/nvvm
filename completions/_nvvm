@@ -28,6 +28,7 @@ _nvvm() {
       local -a commands
       commands=(
         'install:install a specific version of neovim'
+        'uninstall:remove an installed version of neovim'
         'use:use a specific version of neovim'
         'list:list available versions of neovim'
         'run:run a specified version of neovim'
@@ -42,6 +43,16 @@ _nvvm() {
           if (( CURRENT == 3 )); then
             local -a versions
             versions=("${(@f)$(_nvvm_versions)}")
+            _describe 'version' versions
+          fi
+          ;;
+        uninstall)
+          _arguments \
+            '(-f --force)'{-f,--force}'[force removal of the active version]' \
+            '*: :->version'
+          if [[ $state == version ]]; then
+            local -a versions
+            versions=("${(@f)$(_nvvm_installed_versions)}")
             _describe 'version' versions
           fi
           ;;
