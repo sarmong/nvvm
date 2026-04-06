@@ -31,6 +31,7 @@ _nvvm() {
         'use:use a specific version of neovim'
         'list:list available versions of neovim'
         'open:open neovim with a specific version'
+        'refresh:refresh the releases cache'
         'help:show help'
       )
       _describe 'command' commands

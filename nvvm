@@ -7,6 +7,8 @@ VERSION="0.0.1"
 dir=${XDG_DATA_HOME:-$HOME/.local/share}/nvvm
 BIN_DIR=$dir/bin
 LIB_DIR=$dir/lib
+CACHE_DIR=${XDG_CACHE_HOME:-$HOME/.cache}/nvvm
+last_updated_file="$CACHE_DIR/last_updated"
 
 _partial_download=""
 
@@ -25,6 +27,7 @@ usage() {
   echo "  use <version>       Use a specific version of neovim (e.g., 'latest', 'stable', '0.5.0')" >&2
   echo "  list                List available versions of neovim" >&2
   echo "  open <version>      Open neovim with a specific version (e.g., 'latest', 'stable', '0.5.0')" >&2
+  echo "  refresh             Refresh the releases cache" >&2
 }
 
 check_deps() {
@@ -62,12 +65,14 @@ main() {
 
   [ ! -d "$BIN_DIR" ] && mkdir -p "$BIN_DIR"
   [ ! -d "$LIB_DIR" ] && mkdir -p "$LIB_DIR"
+  [ ! -d "$CACHE_DIR" ] && mkdir -p "$CACHE_DIR"
 
   case "$cmd" in
     install) install "$@" ;;
     use) use "$@" ;;
     list) list "$@" ;;
     open) open "$@" ;;
+    refresh) refresh ;;
     *)
       printf "Unknown command: %s\n\n" "$cmd" >&2
       usage
@@ -189,13 +194,22 @@ install() {
   fi
 }
 
+refresh() {
+  rm -f "$last_updated_file"
+
+  echo "Fetching latest releases..."
+  get_releases >/dev/null
+
+  if [ -f "$last_updated_file" ]; then
+    echo "Done."
+  else
+    echo "Refresh failed, using stale cache." >&2
+  fi
+}
+
 get_releases() {
   local releases_api_url="https://api.github.com/repos/neovim/neovim/releases"
-  local cache_dir=${XDG_CACHE_HOME:-$HOME/.cache}/nvvm
-  local cache_file="$cache_dir/releases.json"
-  local last_updated_file="$cache_dir/last_updated"
-
-  [ ! -d "$cache_dir" ] && mkdir -p "$cache_dir"
+  local cache_file="$CACHE_DIR/releases.json"
 
   if [ -f "$cache_file" ] && [ -f "$last_updated_file" ]; then
     local last_updated now
