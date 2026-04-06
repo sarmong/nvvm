@@ -137,7 +137,7 @@ install() {
 
   remote_file_url="$(get_file_url "$version_number")"
 
-  if [ -z "$remote_file_url" ] || [ "$remote_file_url" == "null" ]; then
+  if [ -z "$remote_file_url" ] || [ "$remote_file_url" = "null" ]; then
     echo "ERROR: Could not find download URL for version $version_number" >&2
     exit 1
   fi
@@ -212,7 +212,7 @@ check_checksum_from_digest() {
 
   sha256sum=$(get_release_asset "$version" | jq -r '.digest')
 
-  if [ -z "$sha256sum" ] || [ "$sha256sum" == "null" ]; then
+  if [ -z "$sha256sum" ] || [ "$sha256sum" = "null" ]; then
     return 1
   fi
 
@@ -225,7 +225,7 @@ check_checksum_from_file() {
 
   shasum_url=$(get_release "$version" | jq -r --arg filename "$(basename "$filepath")" '.assets[] | select(.name == $filename + ".sha256sum") | .browser_download_url')
 
-  if [ -z "$shasum_url" ] || [ "$shasum_url" == "null" ]; then
+  if [ -z "$shasum_url" ] || [ "$shasum_url" = "null" ]; then
     return 1
   fi
 
