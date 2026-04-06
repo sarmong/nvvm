@@ -146,7 +146,7 @@ install() {
   default_installed_filepath="$LIB_DIR/$remote_filename" #TODO: use cache dir
 
   _partial_download="$default_installed_filepath"
-  wget --quiet --show-progress --output-document="$default_installed_filepath" "$remote_file_url"
+  curl -L --progress-bar -o "$default_installed_filepath" "$remote_file_url"
 
   if ! check_checksum "$version" "$default_installed_filepath"; then
     echo "ERROR: Checksum verification failed" >&2
@@ -231,7 +231,7 @@ check_checksum_from_file() {
 
   local_shasum_file="$LIB_DIR/$(basename "$shasum_url")"
 
-  wget --quiet --show-progress --output-document="$local_shasum_file" "$shasum_url"
+  curl -L --progress-bar -o "$local_shasum_file" "$shasum_url"
 
   if ! (cd "$(dirname "$filepath")" && sha256sum --check --strict --status "$local_shasum_file"); then
     rm "$local_shasum_file"
