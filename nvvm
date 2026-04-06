@@ -83,14 +83,37 @@ main() {
   esac
 }
 
-## Resolve a partial semver (e.g. 0.10) to the latest matching release from the API.
-## Full semver (X.Y.Z) and non-numeric aliases (nightly, stable) pass through unchanged.
+## Resolve a version string to a full semver.
+## stable/latest: resolved via releases cache to latest non-prerelease semver.
+## Full semver (X.Y.Z) and non-numeric aliases (nightly): pass through unchanged.
+## Partial semver (X.Y): resolved to latest matching release.
 resolve_version() {
   local version="$1"
+
+  # Resolve stable/latest aliases to actual semver
+  if [[ "$version" == "stable" || "$version" == "latest" ]]; then
+    local resolved
+    resolved=$(get_releases | jq -r '
+      [.[] | select(
+        .prerelease == false and
+        .draft == false and
+        (.tag_name | test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))
+      )] | first | .tag_name | ltrimstr("v")')
+    if [ -z "$resolved" ]; then
+      printf "nvvm: could not resolve '%s' to a version\n" "$version" >&2
+      exit 1
+    fi
+    echo "$resolved"
+    return
+  fi
+
+  # Full semver and other non-numeric aliases (nightly) pass through unchanged
   if [[ ! "$version" =~ ^[0-9] ]] || [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     echo "$version"
     return
   fi
+
+  # Partial semver: resolve to latest matching release
   local resolved
   resolved=$(get_releases | jq -r --arg prefix "v${version}." \
     'map(select(.tag_name | startswith($prefix))) | first | .tag_name // empty' |
@@ -102,13 +125,34 @@ resolve_version() {
   echo "$resolved"
 }
 
-# Resolve a partial semver to the latest matching locally installed version.
+## Resolve a version string to a locally installed full semver.
+## stable/latest: resolved via their $BIN_DIR/nvim-<alias> symlink — no network.
+## Full semver: passes through unchanged.
+## Partial semver: scans $LIB_DIR and picks highest matching installed version.
 resolve_installed_version() {
   local version="$1"
+
+  ## Resolve stable/latest via alias symlinks in BIN_DIR
+  if [[ "$version" == "stable" || "$version" == "latest" ]]; then
+    local alias_file="$BIN_DIR/nvim-$version"
+    if [ ! -L "$alias_file" ]; then
+      printf "nvvm: '%s' has not been installed\n" "$version" >&2
+      exit 1
+    fi
+    local target
+    target=$(readlink -f "$alias_file")
+    # Path is: .../lib/<version>/bin/nvim — extract <version>
+    basename "$(dirname "$(dirname "$target")")"
+    return
+  fi
+
+  # Full semver and non-numeric aliases (nightly) pass through unchanged
   if [[ ! "$version" =~ ^[0-9] ]] || [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     echo "$version"
     return
   fi
+
+  # Partial semver: find highest installed matching version
   local resolved
   local matches=()
   for d in "$LIB_DIR/${version}".*; do
@@ -120,6 +164,30 @@ resolve_installed_version() {
     exit 1
   fi
   echo "$resolved"
+}
+
+## Create $BIN_DIR/nvim-stable and $BIN_DIR/nvim-latest symlinks for a given version.
+_create_alias_symlinks() {
+  local version="$1"
+  local version_dir="$LIB_DIR/$version"
+  ln -sf "nvim-$version" "$BIN_DIR/nvim-stable"
+  ln -sf "nvim-$version" "$BIN_DIR/nvim-latest"
+}
+
+## Create alias symlinks only if the given version is the current stable release.
+## Uses cached releases — no extra network call if get_releases cache is warm.
+_create_alias_symlinks_if_needed() {
+  local version="$1"
+  local stable_version
+  stable_version=$(get_releases | jq -r '
+    [.[] | select(
+      .prerelease == false and
+      .draft == false and
+      (.tag_name | test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))
+    )] | first | .tag_name | ltrimstr("v")')
+  if [[ "$version" == "$stable_version" ]]; then
+    _create_alias_symlinks "$version"
+  fi
 }
 
 get_file_url() {
@@ -145,14 +213,15 @@ use() {
     echo "Usage: nvvm use <version>" >&2
     exit 1
   fi
-  local version
-  version="$(resolve_version "$1")"
-  local version_file="$BIN_DIR/nvim-$version"
-  local version_dir="$LIB_DIR/$version"
+  local version="$1"
+  local version_number
+  version_number="$(resolve_version "$version")"
+  local version_file="$BIN_DIR/nvim-$version_number"
+  local version_dir="$LIB_DIR/$version_number"
 
   if [ ! -f "$version_dir/bin/nvim" ]; then
     rm -f "$version_file"
-    install "$version"
+    install "$version_number"
   fi
 
   # Recreate version symlink if stale or missing
@@ -160,9 +229,14 @@ use() {
     ln -sf "$version_dir/bin/nvim" "$version_file"
   fi
 
-  ln -sf "$version_dir/bin/nvim" "$BIN_DIR/nvim"
+  if [[ "$version" == "stable" || "$version" == "latest" ]]; then
+    _create_alias_symlinks "$version_number"
+    ln -sf "nvim-$version" "$BIN_DIR/nvim"
+  else
+    ln -sf "$version_dir/bin/nvim" "$BIN_DIR/nvim"
+  fi
 
-  echo "Now using neovim $version"
+  echo "Now using neovim $version_number"
 }
 
 run() {
@@ -170,13 +244,20 @@ run() {
     echo "Usage: nvvm run <version> [args...]" >&2
     exit 1
   fi
-  local version
-  version="$(resolve_installed_version "$1")"
+
+  local version="$1"
   local version_file="$BIN_DIR/nvim-$version"
 
+  ## Direct lookup: handles exact versions and aliases (nvim-stable, nvim-0.10.4, etc.)
   if [ ! -f "$version_file" ]; then
-    echo "ERROR: Version $version not installed. Install first" >&2
-    exit 1
+    ## Fallback to resolve for partial semvers (e.g. "0.10")
+    local version
+    version="$(resolve_installed_version "$version")"
+    version_file="$BIN_DIR/nvim-$version"
+    if [ ! -f "$version_file" ]; then
+      printf "ERROR: Version %s not installed. Install first\n" "$version" >&2
+      exit 1
+    fi
   fi
 
   shift
@@ -231,6 +312,8 @@ install() {
 
   ln -sf "$version_dir/bin/nvim" "$version_file"
 
+  _create_alias_symlinks_if_needed "$version"
+
   echo "Installed neovim $version at $version_file"
 
   if [ ! -L "$BIN_DIR/nvim" ]; then
@@ -274,8 +357,23 @@ uninstall() {
     exit 1
   fi
 
+  ## Find alias symlinks pointing to this version before deleting the dir
+  local aliases_to_remove=()
+  for alias in stable latest; do
+    local alias_file="$BIN_DIR/nvim-$alias"
+    if [ -L "$alias_file" ] &&
+      [ "$(readlink -f "$alias_file")" = "$(readlink -f "$version_dir/bin/nvim")" ]; then
+      aliases_to_remove+=("$alias")
+    fi
+  done
+
   rm -f "$version_file"
   rm -rf "$version_dir"
+
+  ## Remove alias symlinks that pointed to the deleted version
+  for alias in "${aliases_to_remove[@]}"; do
+    rm -f "$BIN_DIR/nvim-$alias"
+  done
 
   echo "Uninstalled neovim $version"
 
