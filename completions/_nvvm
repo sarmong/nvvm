@@ -1,0 +1,63 @@
+#compdef nvvm
+
+_nvvm_versions() {
+  local cache_file="${XDG_CACHE_HOME:-$HOME/.cache}/nvvm/releases.json"
+  if (( $+commands[jq] )) && [[ -f "$cache_file" ]]; then
+    jq -r '.[].tag_name' "$cache_file"
+  fi
+}
+
+_nvvm_installed_versions() {
+  local lib_dir="${XDG_DATA_HOME:-$HOME/.local/share}/nvvm/lib"
+  if [[ -d "$lib_dir" ]]; then
+    ls "$lib_dir"
+  fi
+}
+
+_nvvm() {
+  local state
+
+  _arguments \
+    '(-h --help)'{-h,--help}'[show help]' \
+    '(-v --version)'{-v,--version}'[show version]' \
+    '1: :->command' \
+    '*: :->args'
+
+  case $state in
+    command)
+      local -a commands
+      commands=(
+        'install:install a specific version of neovim'
+        'use:use a specific version of neovim'
+        'list:list available versions of neovim'
+        'open:open neovim with a specific version'
+        'help:show help'
+      )
+      _describe 'command' commands
+      ;;
+    args)
+      case $words[2] in
+        install|use)
+          if (( CURRENT == 3 )); then
+            local -a versions
+            versions=("${(@f)$(_nvvm_versions)}")
+            _describe 'version' versions
+          fi
+          ;;
+        open)
+          if (( CURRENT == 3 )); then
+            local -a versions
+            versions=("${(@f)$(_nvvm_installed_versions)}")
+            _describe 'version' versions
+          elif (( CURRENT > 3 )); then
+            words=("nvim" "${words[4,-1]}")
+            (( CURRENT -= 2 ))
+            _normal
+          fi
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_nvvm "$@"
