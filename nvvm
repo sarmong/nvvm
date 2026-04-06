@@ -26,7 +26,7 @@ usage() {
   echo "  install <version>   Install a specific version of neovim (e.g., 'latest', 'stable', '0.5.0')" >&2
   echo "  use <version>       Use a specific version of neovim (e.g., 'latest', 'stable', '0.5.0')" >&2
   echo "  list                List available versions of neovim" >&2
-  echo "  open <version>      Open neovim with a specific version (e.g., 'latest', 'stable', '0.5.0')" >&2
+  echo "  run <version>       Run a specified version of neovim (e.g., 'latest', 'stable', '0.5.0')" >&2
   echo "  refresh             Refresh the releases cache" >&2
 }
 
@@ -71,7 +71,7 @@ main() {
     install) install "$@" ;;
     use) use "$@" ;;
     list) list "$@" ;;
-    open) open "$@" ;;
+    run) run "$@" ;;
     refresh) refresh ;;
     *)
       printf "Unknown command: %s\n\n" "$cmd" >&2
@@ -122,9 +122,9 @@ use() {
   echo "Now using neovim $version"
 }
 
-open() {
+run() {
   if [ -z "${1-}" ]; then
-    echo "Usage: nvvm open <version> [args...]" >&2
+    echo "Usage: nvvm run <version> [args...]" >&2
     exit 1
   fi
   local version="$1"

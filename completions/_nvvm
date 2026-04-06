@@ -30,7 +30,7 @@ _nvvm() {
         'install:install a specific version of neovim'
         'use:use a specific version of neovim'
         'list:list available versions of neovim'
-        'open:open neovim with a specific version'
+        'run:run a specified version of neovim'
         'refresh:refresh the releases cache'
         'help:show help'
       )
@@ -45,7 +45,7 @@ _nvvm() {
             _describe 'version' versions
           fi
           ;;
-        open)
+        run)
           if (( CURRENT == 3 )); then
             local -a versions
             versions=("${(@f)$(_nvvm_installed_versions)}")
