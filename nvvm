@@ -67,7 +67,7 @@ get_file_url() {
 }
 
 list() {
-  get_releases | jq -r '.[].tag_name' | while read -r version; do
+  get_releases | jq -r '[.[].tag_name] | reverse | .[]' | while read -r version; do
     if [ "$BIN_DIR/nvim" -ef "$LIB_DIR/$version/bin/nvim" ]; then
       echo "* $version (current)"
     elif [ -d "$LIB_DIR/$version" ]; then
