@@ -89,7 +89,8 @@ get_file_url() {
 }
 
 list() {
-  get_releases | jq -r '[.[].tag_name] | reverse | .[]' | while read -r version; do
+  get_releases | jq -r '[.[].tag_name] | reverse | .[]' | while read -r tag; do
+    local version="${tag#v}"
     if [ "$BIN_DIR/nvim" -ef "$LIB_DIR/$version/bin/nvim" ]; then
       echo "* $version (current)"
     elif [ -f "$LIB_DIR/$version/bin/nvim" ]; then
@@ -147,21 +148,20 @@ install() {
     exit 1
   fi
   local version="$1"
-  local version_number="$version"
-  local version_file="$BIN_DIR/nvim-$version_number"
+  local version_file="$BIN_DIR/nvim-$version"
 
   if [ -f "$version_file" ] && [ "$version" != "nightly" ]; then
-    echo "Version $version_number already installed"
+    echo "Version $version already installed"
     exit 0
   fi
 
-  echo "Installing $version_number..."
+  echo "Installing $version..."
 
   local remote_file_url
-  remote_file_url="$(get_file_url "$version_number")"
+  remote_file_url="$(get_file_url "$version")"
 
   if [ -z "$remote_file_url" ] || [ "$remote_file_url" = "null" ]; then
-    echo "ERROR: Could not find download URL for version $version_number" >&2
+    echo "ERROR: Could not find download URL for version $version" >&2
     exit 1
   fi
 
@@ -179,7 +179,7 @@ install() {
     echo "Checksum verification passed"
   fi
 
-  local version_dir="$LIB_DIR/$version_number"
+  local version_dir="$LIB_DIR/$version"
   [ ! -d "$version_dir" ] && mkdir -p "$version_dir"
 
   tar -zxvf "$default_installed_filepath" --directory="$version_dir" --strip-components=1 >/dev/null
@@ -189,7 +189,7 @@ install() {
 
   ln -sf "$version_dir/bin/nvim" "$version_file"
 
-  echo "Installed neovim $version_number at $version_file"
+  echo "Installed neovim $version at $version_file"
 
   if [ ! -L "$BIN_DIR/nvim" ]; then
     use "$version"
@@ -303,7 +303,12 @@ get_releases() {
 
 get_release() {
   local version="$1"
-  get_releases | jq --arg version "$version" '.[] | select(.tag_name == $version)'
+  # Internally versions are stored without 'v', but GitHub tag names use 'v' for semver
+  local tag_name="$version"
+  if [[ "$version" =~ ^[0-9] ]]; then
+    tag_name="v$version"
+  fi
+  get_releases | jq --arg tag "$tag_name" '.[] | select(.tag_name == $tag)'
 }
 
 get_release_asset() {

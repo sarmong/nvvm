@@ -3,7 +3,7 @@
 _nvvm_versions() {
   local cache_file="${XDG_CACHE_HOME:-$HOME/.cache}/nvvm/releases.json"
   if (( $+commands[jq] )) && [[ -f "$cache_file" ]]; then
-    jq -r '.[].tag_name' "$cache_file"
+    jq -r '.[].tag_name | ltrimstr("v")' "$cache_file"
   fi
 }
 
