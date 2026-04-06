@@ -83,6 +83,45 @@ main() {
   esac
 }
 
+## Resolve a partial semver (e.g. 0.10) to the latest matching release from the API.
+## Full semver (X.Y.Z) and non-numeric aliases (nightly, stable) pass through unchanged.
+resolve_version() {
+  local version="$1"
+  if [[ ! "$version" =~ ^[0-9] ]] || [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "$version"
+    return
+  fi
+  local resolved
+  resolved=$(get_releases | jq -r --arg prefix "v${version}." \
+    'map(select(.tag_name | startswith($prefix))) | first | .tag_name // empty' |
+    sed 's/^v//')
+  if [ -z "$resolved" ]; then
+    printf "nvvm: no release found matching '%s'\n" "$version" >&2
+    exit 1
+  fi
+  echo "$resolved"
+}
+
+# Resolve a partial semver to the latest matching locally installed version.
+resolve_installed_version() {
+  local version="$1"
+  if [[ ! "$version" =~ ^[0-9] ]] || [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "$version"
+    return
+  fi
+  local resolved
+  local matches=()
+  for d in "$LIB_DIR/${version}".*; do
+    [[ -d "$d" ]] && matches+=("$(basename "$d")")
+  done
+  resolved=$(printf '%s\n' "${matches[@]}" | sort -V | tail -1)
+  if [ -z "$resolved" ]; then
+    printf "nvvm: no installed version matches '%s'\n" "$version" >&2
+    exit 1
+  fi
+  echo "$resolved"
+}
+
 get_file_url() {
   local version="$1"
   get_release_asset "$version" | jq -r '.browser_download_url'
@@ -106,7 +145,8 @@ use() {
     echo "Usage: nvvm use <version>" >&2
     exit 1
   fi
-  local version="$1"
+  local version
+  version="$(resolve_version "$1")"
   local version_file="$BIN_DIR/nvim-$version"
   local version_dir="$LIB_DIR/$version"
 
@@ -130,7 +170,8 @@ run() {
     echo "Usage: nvvm run <version> [args...]" >&2
     exit 1
   fi
-  local version="$1"
+  local version
+  version="$(resolve_installed_version "$1")"
   local version_file="$BIN_DIR/nvim-$version"
 
   if [ ! -f "$version_file" ]; then
@@ -147,7 +188,8 @@ install() {
     echo "Usage: nvvm install <version>" >&2
     exit 1
   fi
-  local version="$1"
+  local version
+  version="$(resolve_version "$1")"
   local version_file="$BIN_DIR/nvim-$version"
 
   if [ -f "$version_file" ] && [ "$version" != "nightly" ]; then
@@ -211,7 +253,8 @@ uninstall() {
     exit 1
   fi
 
-  local version="${args[0]}"
+  local version
+  version="$(resolve_installed_version "${args[0]}")"
   local version_dir="$LIB_DIR/$version"
   local version_file="$BIN_DIR/nvim-$version"
 
