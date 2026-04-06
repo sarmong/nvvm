@@ -193,10 +193,33 @@ get_releases() {
     fi
   fi
 
-  curl -s "$releases_api_url" --output "$cache_file"
+  local tmp_file
+  tmp_file=$(mktemp)
 
+  if ! curl -s --fail "$releases_api_url" --output "$tmp_file"; then
+    rm -f "$tmp_file"
+    echo "ERROR: Failed to fetch releases from GitHub API (HTTP error)" >&2
+    if [ -f "$cache_file" ]; then
+      echo "WARNING: Using stale cache" >&2
+      cat "$cache_file"
+      return
+    fi
+    exit 1
+  fi
+
+  if ! jq -e 'type == "array" and length > 0' "$tmp_file" >/dev/null 2>&1; then
+    rm -f "$tmp_file"
+    echo "ERROR: GitHub API returned an unexpected response" >&2
+    if [ -f "$cache_file" ]; then
+      echo "WARNING: Using stale cache" >&2
+      cat "$cache_file"
+      return
+    fi
+    exit 1
+  fi
+
+  mv "$tmp_file" "$cache_file"
   date +%s >"$last_updated_file"
-
   cat "$cache_file"
 }
 
