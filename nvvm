@@ -27,6 +27,17 @@ usage() {
   echo "  open <version>      Open neovim with a specific version (e.g., 'latest', 'stable', '0.5.0')" >&2
 }
 
+check_deps() {
+  local missing=()
+  for dep in curl jq sha256sum; do
+    command -v "$dep" >/dev/null 2>&1 || missing+=("$dep")
+  done
+  if [ ${#missing[@]} -gt 0 ]; then
+    printf "nvvm: missing required dependencies: %s\n" "${missing[*]}" >&2
+    exit 1
+  fi
+}
+
 main() {
   if [ -z "${1-}" ]; then
     usage
@@ -43,6 +54,8 @@ main() {
       exit 0
       ;;
   esac
+
+  check_deps
 
   cmd="$1"
   shift
