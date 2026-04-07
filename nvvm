@@ -169,7 +169,6 @@ resolve_installed_version() {
 ## Create $BIN_DIR/nvim-stable and $BIN_DIR/nvim-latest symlinks for a given version.
 _create_alias_symlinks() {
   local version="$1"
-  local version_dir="$LIB_DIR/$version"
   ln -sf "nvim-$version" "$BIN_DIR/nvim-stable"
   ln -sf "nvim-$version" "$BIN_DIR/nvim-latest"
 }
