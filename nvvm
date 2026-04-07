@@ -210,6 +210,36 @@ _installed_versions() {
   done | sort
 }
 
+## Interactive picker over installed versions.
+## Usage: _pick_installed_version <prompt> [active-label]
+## If active-label is given, the active version is included with "(label)" appended.
+## If omitted, the active version is excluded from the list.
+## Outputs the selected version (without label). Returns 1 if list is empty or user cancels.
+_pick_installed_version() {
+  local prompt="$1"
+  local active_label="${2-}"
+
+  local active=""
+  [ -L "$BIN_DIR/nvim" ] && active=$(readlink -f "$BIN_DIR/nvim")
+
+  local list
+  list=$(_installed_versions | while IFS= read -r v; do
+    if [ -n "$active" ] && [ "$(readlink -f "$LIB_DIR/$v/bin/nvim")" = "$active" ]; then
+      [ -n "$active_label" ] && echo "$v ($active_label)"
+    else
+      echo "$v"
+    fi
+  done)
+
+  [ -z "$list" ] && return 1
+
+  local selected
+  selected=$(echo "$list" | _pick "$prompt") || return 1
+  [ -z "$selected" ] && return 1
+
+  echo "${selected% \(*\)}"
+}
+
 _install_xdg_assets() {
   local version="$1"
   local nvim_share_dir="$LIB_DIR/$version/share"
@@ -284,22 +314,11 @@ use() {
   if [ -z "${1-}" ]; then
     _require_fzf "use <version>"
 
-    local active=""
-    [ -L "$BIN_DIR/nvim" ] && active=$(readlink -f "$BIN_DIR/nvim")
-
-    local list
-    list=$(_installed_versions | while IFS= read -r v; do
-      [ "$(readlink -f "$LIB_DIR/$v/bin/nvim")" = "$active" ] || echo "$v"
-    done)
-
-    if [ -z "$list" ]; then
+    local version
+    version=$(_pick_installed_version "use") || {
       echo "nvvm: No non-active installed versions available" >&2
       return 1
-    fi
-
-    local version
-    version=$(echo "$list" | _pick "use")
-    [ -z "$version" ] && return 1
+    }
 
     use "$version"
     return
@@ -336,28 +355,12 @@ run() {
   if [ -z "${1-}" ]; then
     _require_fzf "run <version> [args...]"
 
-    local active=""
-    [ -L "$BIN_DIR/nvim" ] && active=$(readlink -f "$BIN_DIR/nvim")
-
-    local list
-    list=$(_installed_versions | while IFS= read -r v; do
-      if [ -n "$active" ] && [ "$(readlink -f "$LIB_DIR/$v/bin/nvim")" = "$active" ]; then
-        echo "$v (current)"
-      else
-        echo "$v"
-      fi
-    done)
-
-    if [ -z "$list" ]; then
+    local version
+    version=$(_pick_installed_version "run" "current") || {
       echo "nvvm: No installed versions available" >&2
       return 1
-    fi
+    }
 
-    local selected
-    selected=$(echo "$list" | _pick "run")
-    [ -z "$selected" ] && return 1
-
-    local version="${selected% \(current\)}"
     run "$version"
     return
   fi
@@ -464,8 +467,16 @@ uninstall() {
   done
 
   if [ ${#args[@]} -eq 0 ]; then
-    echo "Usage: nvvm uninstall [--force|-f] <version>" >&2
-    return 1
+    _require_fzf "uninstall [--force|-f] <version>"
+
+    local version
+    version=$(_pick_installed_version "uninstall" "current") || {
+      echo "nvvm: No installed versions available" >&2
+      return 1
+    }
+
+    uninstall "$([ "$force" -eq 1 ] && echo "--force")" "$version"
+    return
   fi
 
   local version
