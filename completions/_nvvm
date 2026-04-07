@@ -3,7 +3,7 @@
 _nvvm_versions() {
   local cache_file="${XDG_CACHE_HOME:-$HOME/.cache}/nvvm/releases.json"
   if (( $+commands[jq] )) && [[ -f "$cache_file" ]]; then
-    jq -r '.[].tag_name | ltrimstr("v")' "$cache_file"
+    jq -r '.[].tag_name | ltrimstr("v")' "$cache_file" | head -20
   fi
 }
 
@@ -30,7 +30,7 @@ _nvvm() {
         'install:install a specific version of neovim'
         'uninstall:remove an installed version of neovim'
         'use:use a specific version of neovim'
-        'list:list available versions of neovim'
+        'list:list available versions of neovim (20 most recent by default)'
         'run:run a specified version of neovim'
         'refresh:refresh the releases cache'
         'help:show help'
@@ -55,6 +55,9 @@ _nvvm() {
             versions=("${(@f)$(_nvvm_installed_versions)}")
             _describe 'version' versions
           fi
+          ;;
+        list)
+          _arguments '(-a --all)'{-a,--all}'[show all available versions]'
           ;;
         run)
           if (( CURRENT == 3 )); then

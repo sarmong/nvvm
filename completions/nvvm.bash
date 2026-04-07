@@ -2,7 +2,7 @@
 
 _nvvm_versions() {
   local cache="${XDG_CACHE_HOME:-$HOME/.cache}/nvvm/releases.json"
-  [[ -f "$cache" ]] && command -v jq &>/dev/null && jq -r '.[].tag_name | ltrimstr("v")' "$cache"
+  [[ -f "$cache" ]] && command -v jq &>/dev/null && jq -r '.[].tag_name | ltrimstr("v")' "$cache" | head -20
 }
 
 _nvvm_installed() {
@@ -22,6 +22,7 @@ _nvvm() {
       case $prev in
         install|use)  mapfile -t COMPREPLY < <(compgen -W "$(_nvvm_versions)" -- "$cur") ;;
         uninstall)    mapfile -t COMPREPLY < <(compgen -W "--force -f $(_nvvm_installed)" -- "$cur") ;;
+        list)         mapfile -t COMPREPLY < <(compgen -W "--all -a" -- "$cur") ;;
         run)          mapfile -t COMPREPLY < <(compgen -W "$(_nvvm_installed)" -- "$cur") ;;
       esac
       ;;

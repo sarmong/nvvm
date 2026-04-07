@@ -25,7 +25,7 @@ usage() {
   echo "Commands:" >&2
   echo "  install <version>   Install a specific version of neovim (e.g., 'latest', 'stable', '0.5.0')" >&2
   echo "  use <version>       Use a specific version of neovim (e.g., 'latest', 'stable', '0.5.0')" >&2
-  echo "  list                List available versions of neovim" >&2
+  echo "  list [-a|--all]     List available versions of neovim (shows 20 most recent by default)" >&2
   echo "  run <version>       Run a specified version of neovim (e.g., 'latest', 'stable', '0.5.0')" >&2
   echo "  uninstall <version> Remove an installed version of neovim" >&2
   echo "  refresh             Refresh the releases cache" >&2
@@ -258,7 +258,18 @@ get_file_url() {
 }
 
 list() {
-  get_releases | jq -r '[.[].tag_name] | reverse | .[]' | while read -r tag; do
+  local all=0
+  for arg in "$@"; do
+    case "$arg" in
+      --all | -a) all=1 ;;
+    esac
+  done
+
+  local tags
+  tags=$(get_releases | jq -r '[.[].tag_name] | .[]')
+  [ "$all" -eq 0 ] && tags=$(echo "$tags" | head -20)
+
+  echo "$tags" | while read -r tag; do
     local version="${tag#v}"
     if [ "$BIN_DIR/nvim" -ef "$LIB_DIR/$version/bin/nvim" ]; then
       echo "* $version (current)"
@@ -522,7 +533,7 @@ refresh() {
 }
 
 get_releases() {
-  local releases_api_url="https://api.github.com/repos/neovim/neovim/releases"
+  local releases_api_url="https://api.github.com/repos/neovim/neovim/releases?per_page=100"
   local cache_file="$CACHE_DIR/releases.json"
 
   if [ -f "$cache_file" ] && [ -f "$last_updated_file" ]; then
@@ -569,12 +580,25 @@ get_releases() {
 
 get_release() {
   local version="$1"
-  # Internally versions are stored without 'v', but GitHub tag names use 'v' for semver
+  ## Internally versions are stored without 'v', but GitHub tag names use 'v' for semver
   local tag_name="$version"
   if [[ "$version" =~ ^[0-9] ]]; then
     tag_name="v$version"
   fi
-  get_releases | jq --arg tag "$tag_name" '.[] | select(.tag_name == $tag)'
+
+  local result
+  result=$(get_releases | jq --arg tag "$tag_name" '.[] | select(.tag_name == $tag)')
+
+  if [ -z "$result" ]; then
+    ## Not in cached releases (may be older than per_page limit); try direct API lookup
+    local fetched
+    fetched=$(curl -s --fail "https://api.github.com/repos/neovim/neovim/releases/tags/$tag_name" 2>/dev/null) || true
+    if [ -n "$fetched" ] && echo "$fetched" | jq -e '.tag_name' >/dev/null 2>&1; then
+      result="$fetched"
+    fi
+  fi
+
+  echo "$result"
 }
 
 get_release_asset() {
