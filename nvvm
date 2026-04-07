@@ -433,8 +433,6 @@ install() {
   if ! check_checksum "$version" "$default_installed_filepath"; then
     echo "ERROR: Checksum verification failed" >&2
     return 1
-  else
-    echo "Checksum verification passed"
   fi
 
   local version_dir="$LIB_DIR/$version"
@@ -606,64 +604,57 @@ get_release_asset() {
   get_release "$version" | jq '.assets[] | select(.name == "nvim-linux-x86_64.tar.gz" or .name == "nvim-linux64.tar.gz")'
 }
 
-check_checksum_from_digest() {
+get_checksum_from_digest() {
   local version="$1"
-  local filepath="$2"
-  local sha256sum
-  sha256sum=$(get_release_asset "$version" | jq -r '.digest')
 
-  if [ -z "$sha256sum" ] || [ "$sha256sum" = "null" ]; then
-    return 1
-  fi
+  local digest
+  digest=$(get_release_asset "$version" | jq -r '.digest')
 
-  echo "${sha256sum:7}  $filepath" | sha256sum --check --strict --status -
+  [ -z "$digest" ] || [ "$digest" = "null" ] && return 1
+
+  echo "${digest:7}"
 }
 
-check_checksum_from_file() {
+get_checksum_from_file() {
   local version="$1"
   local filepath="$2"
+
   local shasum_url
   shasum_url=$(get_release "$version" | jq -r --arg filename "$(basename "$filepath")" '.assets[] | select(.name == $filename + ".sha256sum") | .browser_download_url')
 
-  if [ -z "$shasum_url" ] || [ "$shasum_url" = "null" ]; then
-    return 1
-  fi
+  [ -z "$shasum_url" ] || [ "$shasum_url" = "null" ] && return 1
 
-  local local_shasum_file="$LIB_DIR/$(basename "$shasum_url")"
-
-  curl -L --progress-bar -o "$local_shasum_file" "$shasum_url"
-
-  if ! (cd "$(dirname "$filepath")" && sha256sum --check --strict --status "$local_shasum_file"); then
-    rm "$local_shasum_file"
-    return 1
-  fi
-
-  rm "$local_shasum_file"
+  curl -sL "$shasum_url" | awk '{print $1}'
 }
 
-check_checksum_from_description() {
+get_checksum_from_description() {
   local version="$1"
   local filepath="$2"
-  local filename
+
+  local filename checksum
   filename="$(basename "$filepath")"
+  checksum=$(get_release "$version" | jq '.body' | sed 's/\\n/\n/g' | grep -E "\w{64}\s+$filename" | grep -v 'zsync' | awk '{print $1}')
 
-  echo "Getting checksum from description..."
-
-  local remote_checksum
-  remote_checksum=$(get_release "$version" | jq '.body' | sed 's/\\n/\n/g' | grep -E "\w{64}\s+$filename" | grep -v 'zsync' | awk '{print $1}')
-
-  echo "$remote_checksum  $filepath" | sha256sum --check --strict --status -
+  [ -z "$checksum" ] && return 1
+  echo "$checksum"
 }
 
 check_checksum() {
   local version="$1"
-  local default_installed_filepath="$2"
+  local filepath="$2"
+  local checksum
 
-  if ! check_checksum_from_digest "$version" "$default_installed_filepath"; then
-    if ! check_checksum_from_file "$version" "$default_installed_filepath"; then
-      check_checksum_from_description "$version" "$default_installed_filepath"
-    fi
+  checksum=$(get_checksum_from_digest "$version") ||
+    checksum=$(get_checksum_from_file "$version" "$filepath") ||
+    checksum=$(get_checksum_from_description "$version" "$filepath") || {
+    printf "nvvm: warning: no checksum found for %s, skipping verification\n" "$version" >&2
+    return 0
+  }
+
+  if ! echo "$checksum  $filepath" | sha256sum --check --strict --status -; then
+    return 1
   fi
+  echo "Checksum verification passed"
 }
 
 main "$@"
