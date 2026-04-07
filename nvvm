@@ -190,6 +190,24 @@ _create_alias_symlinks_if_needed() {
   fi
 }
 
+_pick() {
+  fzf --height=40% --reverse --prompt="$1 > "
+}
+
+_require_fzf() {
+  command -v fzf >/dev/null 2>&1 || { printf "Usage: nvvm %s\n" "$1" >&2; exit 1; }
+}
+
+## Prints installed version names sorted oldest-to-newest, one per line.
+_installed_versions() {
+  local d
+  for d in "$LIB_DIR"/*/; do
+    [ -d "$d" ] || continue
+    [ -f "$d/bin/nvim" ] || continue
+    basename "$d"
+  done | sort --reverse
+}
+
 get_file_url() {
   local version="$1"
   get_release_asset "$version" | jq -r '.browser_download_url'
@@ -210,9 +228,29 @@ list() {
 
 use() {
   if [ -z "${1-}" ]; then
-    echo "Usage: nvvm use <version>" >&2
-    exit 1
+    _require_fzf "use <version>"
+
+    local active=""
+    [ -L "$BIN_DIR/nvim" ] && active=$(readlink -f "$BIN_DIR/nvim")
+
+    local list
+    list=$(_installed_versions | while IFS= read -r v; do
+      [ "$(readlink -f "$LIB_DIR/$v/bin/nvim")" = "$active" ] || echo "$v"
+    done)
+
+    if [ -z "$list" ]; then
+      echo "nvvm: No non-active installed versions available" >&2
+      exit 1
+    fi
+
+    local version
+    version=$(echo "$list" | _pick "use")
+    [ -z "$version" ] && exit 1
+
+    use "$version"
+    return
   fi
+
   local version="$1"
   local version_number
   version_number="$(resolve_version "$version")"
@@ -241,8 +279,32 @@ use() {
 
 run() {
   if [ -z "${1-}" ]; then
-    echo "Usage: nvvm run <version> [args...]" >&2
-    exit 1
+    _require_fzf "run <version> [args...]"
+
+    local active=""
+    [ -L "$BIN_DIR/nvim" ] && active=$(readlink -f "$BIN_DIR/nvim")
+
+    local list
+    list=$(_installed_versions | while IFS= read -r v; do
+      if [ -n "$active" ] && [ "$(readlink -f "$LIB_DIR/$v/bin/nvim")" = "$active" ]; then
+        echo "$v (current)"
+      else
+        echo "$v"
+      fi
+    done)
+
+    if [ -z "$list" ]; then
+      echo "nvvm: No installed versions available" >&2
+      exit 1
+    fi
+
+    local selected
+    selected=$(echo "$list" | _pick "run")
+    [ -z "$selected" ] && exit 1
+
+    local version="${selected% \(current\)}"
+    run "$version"
+    return
   fi
 
   local version="$1"
@@ -266,9 +328,26 @@ run() {
 
 install() {
   if [ -z "${1-}" ]; then
-    echo "Usage: nvvm install <version>" >&2
-    exit 1
+    _require_fzf "install <version>"
+
+    local list
+    list=$(get_releases | jq -r '[.[].tag_name | ltrimstr("v")] | .[]' | while IFS= read -r v; do
+      [ -f "$LIB_DIR/$v/bin/nvim" ] && [ "$v" != "nightly" ] || echo "$v"
+    done)
+
+    if [ -z "$list" ]; then
+      echo "nvvm: No uninstalled versions available" >&2
+      exit 1
+    fi
+
+    local version
+    version=$(echo "$list" | _pick "install") || exit 1
+    [ -z "$version" ] && exit 1
+
+    install "$version"
+    return
   fi
+
   local version
   version="$(resolve_version "$1")"
   local version_file="$BIN_DIR/nvim-$version"
