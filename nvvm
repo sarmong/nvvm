@@ -38,7 +38,7 @@ check_deps() {
   done
   if [ ${#missing[@]} -gt 0 ]; then
     printf "nvvm: missing required dependencies: %s\n" "${missing[*]}" >&2
-    exit 1
+    return 1
   fi
 }
 
@@ -101,7 +101,7 @@ resolve_version() {
       )] | first | .tag_name | ltrimstr("v")')
     if [ -z "$resolved" ]; then
       printf "nvvm: could not resolve '%s' to a version\n" "$version" >&2
-      exit 1
+      return 1
     fi
     echo "$resolved"
     return
@@ -120,7 +120,7 @@ resolve_version() {
     sed 's/^v//')
   if [ -z "$resolved" ]; then
     printf "nvvm: no release found matching '%s'\n" "$version" >&2
-    exit 1
+    return 1
   fi
   echo "$resolved"
 }
@@ -137,7 +137,7 @@ resolve_installed_version() {
     local alias_file="$BIN_DIR/nvim-$version"
     if [ ! -L "$alias_file" ]; then
       printf "nvvm: '%s' has not been installed\n" "$version" >&2
-      exit 1
+      return 1
     fi
     local target
     target=$(readlink -f "$alias_file")
@@ -161,7 +161,7 @@ resolve_installed_version() {
   resolved=$(printf '%s\n' "${matches[@]}" | sort -V | tail -1)
   if [ -z "$resolved" ]; then
     printf "nvvm: no installed version matches '%s'\n" "$version" >&2
-    exit 1
+    return 1
   fi
   echo "$resolved"
 }
@@ -197,7 +197,7 @@ _pick() {
 _require_fzf() {
   command -v fzf >/dev/null 2>&1 || {
     printf "Usage: nvvm %s\n" "$1" >&2
-    exit 1
+    return 1
   }
 }
 
@@ -284,12 +284,12 @@ use() {
 
     if [ -z "$list" ]; then
       echo "nvvm: No non-active installed versions available" >&2
-      exit 1
+      return 1
     fi
 
     local version
     version=$(echo "$list" | _pick "use")
-    [ -z "$version" ] && exit 1
+    [ -z "$version" ] && return 1
 
     use "$version"
     return
@@ -340,12 +340,12 @@ run() {
 
     if [ -z "$list" ]; then
       echo "nvvm: No installed versions available" >&2
-      exit 1
+      return 1
     fi
 
     local selected
     selected=$(echo "$list" | _pick "run")
-    [ -z "$selected" ] && exit 1
+    [ -z "$selected" ] && return 1
 
     local version="${selected% \(current\)}"
     run "$version"
@@ -363,7 +363,7 @@ run() {
     version_file="$BIN_DIR/nvim-$version"
     if [ ! -f "$version_file" ]; then
       printf "ERROR: Version %s not installed. Install first\n" "$version" >&2
-      exit 1
+      return 1
     fi
   fi
 
@@ -382,12 +382,12 @@ install() {
 
     if [ -z "$list" ]; then
       echo "nvvm: No uninstalled versions available" >&2
-      exit 1
+      return 1
     fi
 
     local version
-    version=$(echo "$list" | _pick "install") || exit 1
-    [ -z "$version" ] && exit 1
+    version=$(echo "$list" | _pick "install") || return 1
+    [ -z "$version" ] && return 1
 
     install "$version"
     return
@@ -399,7 +399,7 @@ install() {
 
   if [ -f "$version_file" ] && [ "$version" != "nightly" ]; then
     echo "Version $version already installed"
-    exit 0
+    return 0
   fi
 
   echo "Installing $version..."
@@ -409,7 +409,7 @@ install() {
 
   if [ -z "$remote_file_url" ] || [ "$remote_file_url" = "null" ]; then
     echo "ERROR: Could not find download URL for version $version" >&2
-    exit 1
+    return 1
   fi
 
   local remote_filename
@@ -421,7 +421,7 @@ install() {
 
   if ! check_checksum "$version" "$default_installed_filepath"; then
     echo "ERROR: Checksum verification failed" >&2
-    exit 1
+    return 1
   else
     echo "Checksum verification passed"
   fi
@@ -457,7 +457,7 @@ uninstall() {
 
   if [ ${#args[@]} -eq 0 ]; then
     echo "Usage: nvvm uninstall [--force|-f] <version>" >&2
-    exit 1
+    return 1
   fi
 
   local version
@@ -467,7 +467,7 @@ uninstall() {
 
   if [ ! -d "$version_dir" ]; then
     printf "nvvm: version %s is not installed\n" "$version" >&2
-    exit 1
+    return 1
   fi
 
   local active_link="$BIN_DIR/nvim"
@@ -478,7 +478,7 @@ uninstall() {
 
   if [ "$is_active" -eq 1 ] && [ "$force" -eq 0 ]; then
     printf "nvvm: version %s is currently active. Use --force (-f) to uninstall anyway.\n" "$version" >&2
-    exit 1
+    return 1
   fi
 
   ## Find alias symlinks pointing to this version before deleting the dir
@@ -548,7 +548,7 @@ get_releases() {
       cat "$cache_file"
       return
     fi
-    exit 1
+    return 1
   fi
 
   if ! jq -e 'type == "array" and length > 0' "$tmp_file" >/dev/null 2>&1; then
@@ -559,7 +559,7 @@ get_releases() {
       cat "$cache_file"
       return
     fi
-    exit 1
+    return 1
   fi
 
   mv "$tmp_file" "$cache_file"
