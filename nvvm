@@ -207,7 +207,7 @@ _installed_versions() {
     [ -d "$d" ] || continue
     [ -f "$d/bin/nvim" ] || continue
     basename "$d"
-  done | sort --reverse
+  done | sort
 }
 
 _install_xdg_assets() {
