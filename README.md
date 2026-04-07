@@ -2,6 +2,8 @@
 
 A simple bash script to manage multiple Neovim versions.
 
+> Currently supported on **Linux only**.
+
 ## Requirements
 
 - `curl`, `jq`, `sha256sum`
