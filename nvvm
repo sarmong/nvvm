@@ -195,7 +195,10 @@ _pick() {
 }
 
 _require_fzf() {
-  command -v fzf >/dev/null 2>&1 || { printf "Usage: nvvm %s\n" "$1" >&2; exit 1; }
+  command -v fzf >/dev/null 2>&1 || {
+    printf "Usage: nvvm %s\n" "$1" >&2
+    exit 1
+  }
 }
 
 ## Prints installed version names sorted oldest-to-newest, one per line.
@@ -206,6 +209,47 @@ _installed_versions() {
     [ -f "$d/bin/nvim" ] || continue
     basename "$d"
   done | sort --reverse
+}
+
+_install_xdg_assets() {
+  local version="$1"
+  local nvim_share_dir="$LIB_DIR/$version/share"
+  local xdg_data="${XDG_DATA_HOME:-$HOME/.local/share}"
+
+  [ -f "$nvim_share_dir/applications/nvim.desktop" ] &&
+    command install -Dm644 "$nvim_share_dir/applications/nvim.desktop" "$xdg_data/applications/nvim.desktop"
+
+  if [ -d "$nvim_share_dir/icons/hicolor" ]; then
+    while IFS= read -r -d '' src; do
+      local rel="${src#"$nvim_share_dir/icons/hicolor/"}"
+      command install -Dm644 "$src" "$xdg_data/icons/hicolor/$rel"
+    done < <(find "$nvim_share_dir/icons/hicolor" -type f -print0)
+  fi
+
+  [ -f "$nvim_share_dir/man/man1/nvim.1" ] &&
+    command install -Dm644 "$nvim_share_dir/man/man1/nvim.1" "$xdg_data/man/man1/nvim.1"
+
+  command -v update-desktop-database >/dev/null 2>&1 &&
+    update-desktop-database "$xdg_data/applications"
+  command -v gtk-update-icon-cache >/dev/null 2>&1 &&
+    gtk-update-icon-cache -f -t "$xdg_data/icons/hicolor" >/dev/null 2>&1
+
+  return 0
+}
+
+_remove_xdg_assets() {
+  local xdg_data="${XDG_DATA_HOME:-$HOME/.local/share}"
+
+  rm -f "$xdg_data/applications/nvim.desktop"
+  rm -f "$xdg_data/man/man1/nvim.1"
+  find "$xdg_data/icons/hicolor" -name "nvim.*" -type f -delete 2>/dev/null || true
+
+  command -v update-desktop-database >/dev/null 2>&1 &&
+    update-desktop-database "$xdg_data/applications"
+  command -v gtk-update-icon-cache >/dev/null 2>&1 &&
+    gtk-update-icon-cache -f -t "$xdg_data/icons/hicolor" >/dev/null
+
+  return 0
 }
 
 get_file_url() {
@@ -274,6 +318,7 @@ use() {
     ln -sf "$version_dir/bin/nvim" "$BIN_DIR/nvim"
   fi
 
+  _install_xdg_assets "$version_number"
   echo "Now using neovim $version_number"
 }
 
@@ -458,6 +503,7 @@ uninstall() {
 
   if [ "$is_active" -eq 1 ]; then
     rm -f "$active_link"
+    _remove_xdg_assets
     echo "Warning: no version is currently active. Run 'nvvm use <version>' to set one."
   fi
 }
