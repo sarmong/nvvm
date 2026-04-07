@@ -1,6 +1,19 @@
 # nvvm — Neovim Version Manager
 
-A simple bash script to manage multiple Neovim versions.
+A simple bash script to manage multiple Neovim versions on your system. Allows
+you to easily install, switch between, and run different Neovim versions without
+affecting your system's default installation.
+
+## Features
+
+- Install specific Neovim versions (stable, latest, nightly, or any semver)
+- Switch between installed versions with a single command
+- Run specific versions without switching
+- SHA-256 checksum verification on every install
+- Installs man page, .desktop file, and icons (XDG paths)
+- Interactive version picker with fzf (if installed)
+- Shell completions for zsh and bash
+- Lightweight and fast, with minimal dependencies
 
 > Currently supported on **Linux only**.
 
@@ -36,6 +49,9 @@ Add to your shell config (`~/.zshrc` or `~/.bashrc`):
 export PATH="${XDG_DATA_HOME:-$HOME/.local/share}/nvvm/bin:$PATH"
 ```
 
+This also makes `nvim-stable`, `nvim-latest`, and `nvim-<version>` available as
+direct executables alongside the default `nvim`.
+
 **Zsh completions**:
 
 ```sh
@@ -45,14 +61,14 @@ autoload -Uz compinit && compinit
 
 ## Usage
 
-| Command                                  | Description                                                                          |
-| ---------------------------------------- | ------------------------------------------------------------------------------------ |
-| `nvvm install <version>`                 | Install a Neovim version                                                             |
-| `nvvm use <version>`                     | Switch to a version (installs it if not present)                                     |
-| `nvvm list [-a\|--all]`                  | List available versions (installed marked with `*`); shows 20 most recent by default |
-| `nvvm run <version> [args...]`           | Run a specific version without switching                                             |
-| `nvvm uninstall [-f\|--force] <version>` | Remove an installed version (`--force` required to uninstall the active version)     |
-| `nvvm refresh`                           | Refresh the releases cache                                                           |
+| Command                                  | Description                                                                      |
+| ---------------------------------------- | -------------------------------------------------------------------------------- |
+| `nvvm install <version>`                 | Install a Neovim version                                                         |
+| `nvvm use <version>`                     | Switch to a version (installs it if not present)                                 |
+| `nvvm list [-a\|--all]`                  | List available versions; shows 20 most recent by default                         |
+| `nvvm run <version> [args...]`           | Run a specific version without switching                                         |
+| `nvvm uninstall [-f\|--force] <version>` | Remove an installed version (`--force` required to uninstall the active version) |
+| `nvvm refresh`                           | Refresh the releases cache                                                       |
 
 `<version>` accepts `stable`, `latest`, full semver (`0.10.0`), partial semver
 (`0.10`), or `nightly`. Omitting `<version>` for `install`, `use`, `run`, and
