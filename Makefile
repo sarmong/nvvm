@@ -1,6 +1,6 @@
 PREFIX ?= $(HOME)/.local
 
-.PHONY: install uninstall
+.PHONY: install uninstall test
 
 install:
 	install -Dm755 nvvm $(DESTDIR)$(PREFIX)/bin/nvvm
@@ -24,3 +24,6 @@ uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/nvvm
 	rm -f $(DESTDIR)$(PREFIX)/share/zsh/site-functions/_nvvm
 	rm -f $(DESTDIR)$(PREFIX)/share/bash-completion/completions/nvvm
+
+test:
+	bats tests/unit/
