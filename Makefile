@@ -1,6 +1,6 @@
 PREFIX ?= $(HOME)/.local
 
-.PHONY: install uninstall test
+.PHONY: install uninstall test test-e2e
 
 install:
 	install -Dm755 nvvm $(DESTDIR)$(PREFIX)/bin/nvvm
@@ -27,3 +27,7 @@ uninstall:
 
 test:
 	bats tests/unit/
+
+test-e2e:
+	bats tests/e2e/
+
